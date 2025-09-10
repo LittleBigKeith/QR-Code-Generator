@@ -10,7 +10,6 @@ public class QRCode {
     private Version version;
     private int size;
     private Constants.ENCODING_MODE encMode;
-    // private Constants.ERROR_CORRECTION_LEVEL ecLevel;
     private int numberOfDataECB;
     private String data;
     private int[][] qrcode;
@@ -139,7 +138,6 @@ public class QRCode {
 
     private void fillFormatInfo() {
         String formatBinaryString = String.join("", version.ecLevel().binaryString(), maskingPattern.binaryString());
-        System.out.println(formatBinaryString);
         List<Integer> formatBytes = formatBinaryString.chars().boxed().map(i -> i - '0').collect(Collectors.toList());
         List<Integer> GF = Constants.FORMAT_INFO_GF;
         List<Integer> ECB = formatErrorCalculation.calculateECB(formatBytes, GF);
@@ -188,9 +186,7 @@ public class QRCode {
 
         List<Integer> dataBytes = dataCalculation.getDataBytes(data, encMode);
         List<Integer> GF = IntStream.rangeClosed(0, numberOfDataECB).map(i -> dataErrorCalculation.getGFCoefficient(numberOfDataECB, i)).boxed().collect(Collectors.toList()).reversed();
-        System.out.println(GF.toString());
         List<Integer> ECB = dataErrorCalculation.calculateECB(dataBytes, GF);
-        System.out.println(ECB.toString());
         dataBytes.addAll(ECB);
 
         String dataBinaryString = String.join("", dataBytes.stream().map(i -> String.format("%8s", Integer.toBinaryString(i)).replace(" ", "0")).collect(Collectors.toList()));
