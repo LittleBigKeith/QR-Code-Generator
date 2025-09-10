@@ -16,7 +16,7 @@ public class ErrorCalculation {
         this.numberOfECB = numberOfECB;
         this.numElements = numElements;
         this.polynomialNumber = polynomialNumber;
-        alphas = calculateAlphas();
+        this.alphas = calculateAlphas();
     }
 
 
@@ -81,5 +81,9 @@ public class ErrorCalculation {
                 return Arrays.stream(ECB).boxed().toList();
             }
         }
+    }
+
+    public int applyFilter(int formatInt, int maskPattern) {
+        return formatInt ^ maskPattern;
     }
 }

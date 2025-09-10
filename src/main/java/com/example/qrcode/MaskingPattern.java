@@ -1,38 +1,51 @@
 package com.example.qrcode;
 
-public class MaskingPattern {
+public enum MaskingPattern {
 
-    int index;
+    _1(1),
+    _2(2),
+    _3(3),
+    _4(4),
+    _5(5),
+    _6(6),
+    _7(7),
+    _8(8);
 
-    public MaskingPattern(int index) {
+    private final int index;
+
+    MaskingPattern(int index) {
         this.index = index;
     }
 
-    public void pattern_1() { }
-    public void pattern_2() { }
-    public void pattern_3() { }
-    public void pattern_4() { }
-    public void pattern_5() { }
-    public void pattern_6() { }
-    public void pattern_7() { }
-    public void pattern_8() { }
+    public int pattern_0(int j, int i) { return (i + j) % 2 == 0 ? 1 : 0; }
+    public int pattern_1(int j, int i) { return i % 2 == 0 ? 1 : 0; }
+    public int pattern_2(int j, int i) { return j % 3 == 0 ? 1 : 0; }
+    public int pattern_3(int j, int i) { return (i + j) % 3 == 0 ? 1 : 0; }
+    public int pattern_4(int j, int i) { return (i / 2 + j / 3) % 2 == 0 ? 1 : 0; }
+    public int pattern_5(int j, int i) { return (i * j) % 2 + (i * j) % 3 == 0 ? 1 : 0; }
+    public int pattern_6(int j, int i) { return ((i * j) % 3 + i * j) % 2 == 0 ? 1 : 0; }
+    public int pattern_7(int j, int i) { return ((i * j) % 3 + i + j) % 2 == 0 ? 1 : 0; }
 
     interface Mask {
-        void mask();
+        int mask(int j, int i);
     }
-
     private Mask[] moveActions = new Mask[] {
-        new Mask() { public void mask() { pattern_1(); } },
-        new Mask() { public void mask() { pattern_2(); } },
-        new Mask() { public void mask() { pattern_3(); } },
-        new Mask() { public void mask() { pattern_4(); } },
-        new Mask() { public void mask() { pattern_5(); } },
-        new Mask() { public void mask() { pattern_6(); } },
-        new Mask() { public void mask() { pattern_7(); } },
-        new Mask() { public void mask() { pattern_8(); } },
+        new Mask() { public int mask(int j, int i) { return pattern_0(i, j); } },
+        new Mask() { public int mask(int j, int i) { return pattern_1(i, j); } },
+        new Mask() { public int mask(int j, int i) { return pattern_2(i, j); } },
+        new Mask() { public int mask(int j, int i) { return pattern_3(i, j); } },
+        new Mask() { public int mask(int j, int i) { return pattern_4(i, j); } },
+        new Mask() { public int mask(int j, int i) { return pattern_5(i, j); } },
+        new Mask() { public int mask(int j, int i) { return pattern_6(i, j); } },
+        new Mask() { public int mask(int j, int i) { return pattern_7(i, j); } },
     };
 
-    public void of() {
-        moveActions[index].mask();
+    public int of(int j, int i) {
+        return moveActions[index].mask(i, j);
     }
+
+    public String binaryString() {
+        return String.format("%3s", Integer.toBinaryString(index)).replace(" ", "0");
+    }
+
 }
