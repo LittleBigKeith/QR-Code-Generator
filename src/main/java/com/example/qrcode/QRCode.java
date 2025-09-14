@@ -1,8 +1,9 @@
 package com.example.qrcode;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -10,13 +11,11 @@ public class QRCode {
     private Version version;
     private int size;
     private Constants.ENCODING_MODE encMode;
-    private int numberOfDataECB;
     private String data;
     private int[][] qrcode;
     private boolean[][] drawn;
 
     DataCalculation dataCalculation;
-    ErrorCalculation dataErrorCalculation;
     ErrorCalculation formatErrorCalculation;
     MaskingPattern maskingPattern;
 
@@ -25,13 +24,11 @@ public class QRCode {
         this.version = version;
         this.size = version.toInt() * 4 + 17;
         this.encMode = encMode;
-        this.numberOfDataECB = 7;
         this.maskingPattern = maskingPattern;
         this.qrcode = new int[size][size];
         this.drawn = new boolean[size][size];
 
         this.dataCalculation = new DataCalculation();
-        this.dataErrorCalculation = new ErrorCalculation(numberOfDataECB, Constants.DATA_NUM_ELE, Constants.DATA_POLY_NUM);
         this.formatErrorCalculation = new ErrorCalculation(Constants.NUMBER_OF_FORMAT_ECB, Constants.FORMAT_NUM_ELE, Constants.FORMAT_POLY_NUM);
     }
 
@@ -165,56 +162,107 @@ public class QRCode {
     }
 
     private void draw(int i, int j, int value) {
+        if (i < 0 || i > qrcode.length || j < 0 || j > qrcode[i].length) {
+            return;
+        }
         qrcode[i][j] = value;
         drawn[i][j] = true;
     }
 
     private int qrcode(int i, int j) {
+        if (i < 0 || i > qrcode.length || j < 0 || j > qrcode[i].length) {
+            return -1;
+        }
         return qrcode[i][j];
     }
 
     private boolean drawn(int i, int j) {
+       // if (i < 0 || i > qrcode.length || j < 0 || j > qrcode[i].length) {
+       //     return true;
+       // }
         return drawn[i][j];
     }
 
     public void generate() {
+
         fillAlignmentBlocks();
         fillAlignmentPatterns();
         fillTimingPatterns();
         fillFormatInfo();
         fillFixedDots();
 
-        List<Integer> dataBytes = dataCalculation.getDataBytes(data, encMode);
-        List<Integer> GF = IntStream.rangeClosed(0, numberOfDataECB).map(i -> dataErrorCalculation.getGFCoefficient(numberOfDataECB, i)).boxed().collect(Collectors.toList()).reversed();
-        List<Integer> ECB = dataErrorCalculation.calculateECB(dataBytes, GF);
-        dataBytes.addAll(ECB);
-
-        String dataBinaryString = String.join("", dataBytes.stream().map(i -> String.format("%8s", Integer.toBinaryString(i)).replace(" ", "0")).collect(Collectors.toList()));
+        List<Integer> dataBytes = dataCalculation.getDataBytes(data, version, encMode);
+        List<Integer> errorBytes = new ArrayList<>();
+        int startByte = 0;
+        for (Block b : version.getBlocks()) {
+            int numECB = b.numErrorCodewords();
+            ErrorCalculation dataErrorCalculation = new ErrorCalculation(numECB, Constants.DATA_NUM_ELE, Constants.DATA_POLY_NUM);
+            
+            int[][] eTable = dataErrorCalculation.calculateETable(numECB);
+            List<Integer> GF = Arrays.stream(eTable[numECB]).boxed().toList();
+            List<Integer> ECB = dataErrorCalculation.calculateECB(dataBytes.subList(startByte, startByte + b.numDataCodewords()), GF);
+            errorBytes.addAll(ECB);
+            startByte += b.numDataCodewords();
+        }
 
         Coords coords = new Coords(size);
 
-        Iterator<Integer> dataBytesIter = dataBinaryString.chars().map(i -> i - '0').iterator();
-        Iterator<Integer> paddingIter = Constants.PADDING_PATTERN.iterator();
+        for (int i = 0; i < version.getMaxDataBytes(); i++) {
+            int blockStartByte = 0;
+            for (Block b : version.getBlocks()) {
+                if (i >= b.numDataCodewords()) {
+                    continue;
+                }
+                int blockByte = dataBytes.get(blockStartByte + i);
+                String blockByteString = String.format("%8s", Integer.toBinaryString(blockByte)).replace(" ", "0");
+                Iterator<Integer> blockByteIter = blockByteString.chars().map(j -> j - '0').iterator();
+                while (blockByteIter.hasNext()) {
+                    draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(blockByteIter.next(), coords, maskingPattern));
+                    while (drawn(coords.getY(), coords.getX())) {
+                        coords.update();
+                            if (coords.getX() < 0 || coords.getX() >= size || coords.getY() < 0 || coords.getY() >=  size) {
+                            break;
+                        }
+                    }
+                }
+                blockStartByte += b.numDataCodewords();
+            }
+        }
+        
+        for (int i = 0; i < version.getMaxErrorBytes(); i++) {
+            int blockStartByte = 0;
+            for (Block b : version.getBlocks()) {
+                int blockByte = errorBytes.get(blockStartByte + i);
+                String blockByteString = String.format("%8s", Integer.toBinaryString(blockByte)).replace(" ", "0");
+                Iterator<Integer> blockByteIter = blockByteString.chars().map(j -> j - '0').iterator();
+                while (blockByteIter.hasNext()) {
+                    if (coords.getX() < 0 || coords.getX() >= size || coords.getY() < 0 || coords.getY() >=  size) {
+                        break;
+                    }
+                    draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(blockByteIter.next(), coords, maskingPattern));
+                    while (drawn(coords.getY(), coords.getX())) {
+                        coords.update();
+                            if (coords.getX() < 0 || coords.getX() >= size || coords.getY() < 0 || coords.getY() >=  size) {
+                            break;
+                        }
+                    }
+                }
+                blockStartByte += b.numErrorCodewords();
+            }
+        }
+
         while (true) {
             if (coords.getX() < 0 || coords.getX() >= size || coords.getY() < 0 || coords.getY() >=  size) {
                 break;
             }
+
             if (!drawn(coords.getY(), coords.getX())) {
-                try {
-                    draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(dataBytesIter.next(), coords, maskingPattern));
-                } catch (NoSuchElementException e) {
-                    try {
-                        draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(paddingIter.next(), coords, maskingPattern));
-                    } catch (NoSuchElementException e2) {
-                        paddingIter = Constants.PADDING_PATTERN.iterator();
-                        draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(paddingIter.next(), coords, maskingPattern));
-                    }
-                }
+                draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(0, coords, maskingPattern));
             }
 
             coords.update();
         }
-
+        
         for (int i = 0; i < 4; i++) {
             System.out.println();
         }

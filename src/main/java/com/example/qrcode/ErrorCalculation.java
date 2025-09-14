@@ -3,7 +3,6 @@ package com.example.qrcode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class ErrorCalculation {
 
@@ -29,33 +28,19 @@ public class ErrorCalculation {
         return Arrays.stream(coefficients).boxed().toList();
     }
 
-    public int getGFCoefficient(int polyDegree, int xDegree) {
-        List<List<Integer>> comboList = new ArrayList<>();
-        getCombos(comboList, new ArrayList<>(), polyDegree - xDegree, 0);
-        return getAlphaValue(comboList);
-    }
-
-    private void getCombos(List<List<Integer>> comboList, List<Integer> combo, int len, int index) {
-        if (combo.size() == len) {
-            comboList.add(combo);
-            return;
+    public int[][] calculateETable(int numECB) {
+        int[][] eTable = new int[numECB + 1][numECB + 1];
+        eTable[0][0] = 1;
+        for (int m = 1; m <= numECB; m++) {
+            eTable[0][m] = 0;
         }
-        if (index >= numberOfECB) {
-            return;
+        for (int n = 1; n <= numECB; n++) {
+            eTable[n][0] = 1;
+            for (int m = 1; m <= n; m++) {
+                eTable[n][m] = eTable[n-1][m] ^ (alphas.get((n - 1 + alphas.indexOf(eTable[n-1][m-1])) % 255));
+            }
         }
-        List<Integer> newCombo = new ArrayList<>(combo);
-        newCombo.add(index);
-        getCombos(comboList, newCombo, len, index + 1);
-        getCombos(comboList, combo, len, index + 1);
-    }
-
-    private int getAlphaValue(List<List<Integer>> comboList) {
-        List<Integer> comboSumList = comboList.stream().map(combo -> combo.stream().mapToInt(Integer::intValue).sum() % (numElements - 1)).collect(Collectors.toList());
-        int alphaDegree = 0;
-        for (int c : comboSumList) {
-            alphaDegree ^= alphas.get(c);
-        }
-        return alphaDegree;
+        return eTable;
     }
 
     public List<Integer> calculateECB(List<Integer> dataBytes, List<Integer> GF) {

@@ -46,6 +46,6 @@ public class Constants {
     final static int FORMAT_INFO_MASK_PATTERN = 0b101010000010010;
     final static int NUMBER_OF_FORMAT_ECB = 10;
 
-    final static List<Integer> PADDING_PATTERN = List.of(1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1);
+    final static int PADDING_PATTERN = 0b1110110000010001;
 }
 
