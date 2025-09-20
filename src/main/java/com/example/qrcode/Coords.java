@@ -54,11 +54,11 @@ public class Coords {
         return String.format("coords = (%d, %d), skippedX = %d, skippedY = %d", x + skippedX, y + skippedY, skippedX, skippedY);
     }
 
-    public int getX() {
+    public int x() {
         return x + skippedX;
     }
 
-    public int getY() {
+    public int y() {
         return y + skippedY;
     }
 }

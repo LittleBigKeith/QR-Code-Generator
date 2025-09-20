@@ -5,31 +5,27 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class QRCode {
     private Version version;
     private int size;
     private Constants.ENCODING_MODE encMode;
+    private boolean mirror;
     private String data;
     private int[][] qrcode;
     private boolean[][] drawn;
 
-    DataCalculation dataCalculation;
-    ErrorCalculation formatErrorCalculation;
     MaskingPattern maskingPattern;
 
-    public QRCode(String data, Version version, Constants.ENCODING_MODE encMode, MaskingPattern maskingPattern) {
+    public QRCode(String data, Version version, Constants.ENCODING_MODE encMode, MaskingPattern maskingPattern, boolean mirror) {
         this.data = data;
         this.version = version;
         this.size = version.toInt() * 4 + 17;
         this.encMode = encMode;
         this.maskingPattern = maskingPattern;
+        this.mirror = mirror;
         this.qrcode = new int[size][size];
         this.drawn = new boolean[size][size];
-
-        this.dataCalculation = new DataCalculation();
-        this.formatErrorCalculation = new ErrorCalculation(Constants.NUMBER_OF_FORMAT_ECB, Constants.FORMAT_NUM_ELE, Constants.FORMAT_POLY_NUM);
     }
 
     private void fillAlignmentBlocks() {
@@ -134,6 +130,7 @@ public class QRCode {
     }
 
     private void fillFormatInfo() {
+        ErrorCalculation formatErrorCalculation = new ErrorCalculation(Constants.NUMBER_OF_FORMAT_ECB, Constants.FORMAT_NUM_ELE, Constants.FORMAT_POLY_NUM);
         String formatBinaryString = String.join("", version.ecLevel().binaryString(), maskingPattern.binaryString());
         List<Integer> formatBytes = formatBinaryString.chars().boxed().map(i -> i - '0').collect(Collectors.toList());
         List<Integer> GF = Constants.FORMAT_INFO_GF;
@@ -159,6 +156,29 @@ public class QRCode {
         for (int j = 0; j < 8; j++) {
             draw(Constants.ALIGN_BLOCK_L.length + 1, size - Constants.ALIGN_BLOCK_L.length + j - 1, formatBytes.get(j + 7));
         }
+    }
+
+    private void fillVersionInfo() {
+        if (version.toInt() < 7) {
+            return;
+        }
+        ErrorCalculation versionErrorCalculation = new ErrorCalculation(Constants.NUMBER_OF_VERSION_ECB, Constants.VERSION_NUM_ELE, Constants.VERSION_POLY_NUM);
+        String versionBinaryString = String.format("%6s", Integer.toBinaryString(version.toInt())).replace(" ", "0");
+        List<Integer> versionBytes = versionBinaryString.chars().boxed().map(i -> i - '0').collect(Collectors.toList());
+        List<Integer> GF = Constants.VERSION_INFO_GF;
+        List<Integer> ECB = versionErrorCalculation.calculateECB(versionBytes, GF);
+        versionBytes.addAll(ECB);
+        for (int j = 0; j < 6; j++) {
+            for (int i = 0; i < 3; i++) {
+                draw(size - Constants.ALIGN_BLOCK_L.length - 4 + i, j, versionBytes.get(versionBytes.size() - j * 3 - i - 1));
+            }
+         }
+
+         for (int i = 0; i < 6; i++) {
+            for (int j = 0; j < 3; j++) {
+                draw(i, size - Constants.ALIGN_BLOCK_L.length - 4 + j, versionBytes.get(versionBytes.size() - i * 3 - j - 1));
+            }
+         }
     }
 
     private void draw(int i, int j, int value) {
@@ -189,12 +209,14 @@ public class QRCode {
         fillAlignmentPatterns();
         fillTimingPatterns();
         fillFormatInfo();
+        fillVersionInfo();
         fillFixedDots();
 
-        List<Integer> dataBytes = dataCalculation.getDataBytes(data, version, encMode);
+        DataCalculation dataCalculation = new DataCalculation();
+        List<Integer> dataBytes = dataCalculation.dataBytes(data, version, encMode);
         List<Integer> errorBytes = new ArrayList<>();
         int startByte = 0;
-        for (Block b : version.getBlocks()) {
+        for (Block b : version.blocks()) {
             int numECB = b.numErrorCodewords();
             ErrorCalculation dataErrorCalculation = new ErrorCalculation(numECB, Constants.DATA_NUM_ELE, Constants.DATA_POLY_NUM);
             
@@ -207,9 +229,9 @@ public class QRCode {
 
         Coords coords = new Coords(size);
 
-        for (int i = 0; i < version.getMaxDataBytes(); i++) {
+        for (int i = 0; i < version.maxDataBytes(); i++) {
             int blockStartByte = 0;
-            for (Block b : version.getBlocks()) {
+            for (Block b : version.blocks()) {
                 if (i >= b.numDataCodewords()) {
                     continue;
                 }
@@ -217,10 +239,10 @@ public class QRCode {
                 String blockByteString = String.format("%8s", Integer.toBinaryString(blockByte)).replace(" ", "0");
                 Iterator<Integer> blockByteIter = blockByteString.chars().map(j -> j - '0').iterator();
                 while (blockByteIter.hasNext()) {
-                    draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(blockByteIter.next(), coords, maskingPattern));
-                    while (drawn(coords.getY(), coords.getX())) {
+                    draw(coords.y(), coords.x(), dataCalculation.applyFilter(blockByteIter.next(), coords, maskingPattern));
+                    while (drawn(coords.y(), coords.x())) {
                         coords.update();
-                            if (coords.getX() < 0 || coords.getX() >= size || coords.getY() < 0 || coords.getY() >=  size) {
+                            if (coords.x() < 0 || coords.x() >= size || coords.y() < 0 || coords.y() >=  size) {
                             break;
                         }
                     }
@@ -229,20 +251,20 @@ public class QRCode {
             }
         }
         
-        for (int i = 0; i < version.getMaxErrorBytes(); i++) {
+        for (int i = 0; i < version.maxErrorBytes(); i++) {
             int blockStartByte = 0;
-            for (Block b : version.getBlocks()) {
+            for (Block b : version.blocks()) {
                 int blockByte = errorBytes.get(blockStartByte + i);
                 String blockByteString = String.format("%8s", Integer.toBinaryString(blockByte)).replace(" ", "0");
                 Iterator<Integer> blockByteIter = blockByteString.chars().map(j -> j - '0').iterator();
                 while (blockByteIter.hasNext()) {
-                    if (coords.getX() < 0 || coords.getX() >= size || coords.getY() < 0 || coords.getY() >=  size) {
+                    if (coords.x() < 0 || coords.x() >= size || coords.y() < 0 || coords.y() >=  size) {
                         break;
                     }
-                    draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(blockByteIter.next(), coords, maskingPattern));
-                    while (drawn(coords.getY(), coords.getX())) {
+                    draw(coords.y(), coords.x(), dataCalculation.applyFilter(blockByteIter.next(), coords, maskingPattern));
+                    while (drawn(coords.y(), coords.x())) {
                         coords.update();
-                            if (coords.getX() < 0 || coords.getX() >= size || coords.getY() < 0 || coords.getY() >=  size) {
+                            if (coords.x() < 0 || coords.x() >= size || coords.y() < 0 || coords.y() >=  size) {
                             break;
                         }
                     }
@@ -252,12 +274,12 @@ public class QRCode {
         }
 
         while (true) {
-            if (coords.getX() < 0 || coords.getX() >= size || coords.getY() < 0 || coords.getY() >=  size) {
+            if (coords.x() < 0 || coords.x() >= size || coords.y() < 0 || coords.y() >=  size) {
                 break;
             }
 
-            if (!drawn(coords.getY(), coords.getX())) {
-                draw(coords.getY(), coords.getX(), dataCalculation.applyFilter(0, coords, maskingPattern));
+            if (!drawn(coords.y(), coords.x())) {
+                draw(coords.y(), coords.x(), dataCalculation.applyFilter(0, coords, maskingPattern));
             }
 
             coords.update();
@@ -266,13 +288,19 @@ public class QRCode {
         for (int i = 0; i < 4; i++) {
             System.out.println();
         }
+        int j = 0;
         for (int[] row : qrcode) {
             System.out.print("        ");
-            for (int grid : row) {
-                System.out.print(grid == 1 ? String.format("%c%c", Constants.FILLED_SQUARE, Constants.FILLED_SQUARE) : "  ");
+            for (int i = 0; i < row.length; i++) {
+                if (mirror) {
+                    System.out.print(row[row.length - i - 1] == 1 ? String.format("%c%c", Constants.FILLED_SQUARE, Constants.FILLED_SQUARE) : "  ");
+                } else {
+                    System.out.print(row[i] == 1 ? String.format("%c%c", Constants.FILLED_SQUARE, Constants.FILLED_SQUARE) : "  ");
+                }
             }
             System.out.print("        ");
             System.out.println();
+            j += 1;
         }
         for (int i = 0; i < 4; i++) {
             System.out.println();
