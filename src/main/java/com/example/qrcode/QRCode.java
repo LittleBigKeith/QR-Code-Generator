@@ -288,7 +288,6 @@ public class QRCode {
         for (int i = 0; i < 4; i++) {
             System.out.println();
         }
-        int j = 0;
         for (int[] row : qrcode) {
             System.out.print("        ");
             for (int i = 0; i < row.length; i++) {
@@ -300,7 +299,6 @@ public class QRCode {
             }
             System.out.print("        ");
             System.out.println();
-            j += 1;
         }
         for (int i = 0; i < 4; i++) {
             System.out.println();
